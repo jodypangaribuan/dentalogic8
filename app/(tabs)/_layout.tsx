@@ -34,6 +34,10 @@ export default function TabLayout() {
           paddingBottom: Platform.OS === 'ios' ? 25 : 10,
           paddingTop: 10,
           justifyContent: 'space-around',
+          position: 'absolute',
+          bottom: 0,
+          left: 0,
+          right: 0,
         },
         tabBarLabelStyle: {
           fontSize: 12,

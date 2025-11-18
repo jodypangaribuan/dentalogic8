@@ -1,5 +1,7 @@
+
 import { IconSymbol } from '@/components/ui/icon-symbol';
 import { Colors } from '@/constants/theme';
+import * as Brightness from 'expo-brightness';
 import { CameraType, CameraView, useCameraPermissions } from 'expo-camera';
 import * as ImagePicker from 'expo-image-picker';
 import { router, useLocalSearchParams } from 'expo-router';
@@ -10,6 +12,9 @@ import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 export default function CameraModal() {
   const [permission, requestPermission] = useCameraPermissions();
   const [facing, setFacing] = useState<CameraType>('back');
+  const [flash, setFlash] = useState<'on' | 'off' | 'auto'>('off');
+  const [frontCameraFlash, setFrontCameraFlash] = useState(false);
+  const [originalBrightness, setOriginalBrightness] = useState<number>(1.0);
   const cameraRef = useRef<CameraView>(null);
   const params = useLocalSearchParams();
   const insets = useSafeAreaInsets();
@@ -31,6 +36,53 @@ export default function CameraModal() {
       requestPermission();
     }
   }, [permission, requestPermission]);
+
+  // Get original brightness when component mounts
+  useEffect(() => {
+    const getOriginalBrightness = async () => {
+      try {
+        const brightness = await Brightness.getBrightnessAsync();
+        setOriginalBrightness(brightness);
+      } catch (error) {
+        console.warn('Could not get brightness:', error);
+      }
+    };
+    
+    getOriginalBrightness();
+  }, []);
+
+  // Control brightness when front camera flash is active
+  useEffect(() => {
+    const controlBrightness = async () => {
+      try {
+        if (facing === 'front' && frontCameraFlash) {
+          // Set brightness to maximum when front camera flash is active
+          await Brightness.setBrightnessAsync(1.0);
+        } else {
+          // Restore original brightness when flash is off or camera is switched
+          await Brightness.setBrightnessAsync(originalBrightness);
+        }
+      } catch (error) {
+        console.warn('Could not control brightness:', error);
+      }
+    };
+
+    controlBrightness();
+  }, [facing, frontCameraFlash, originalBrightness]);
+
+  // Cleanup: restore original brightness when component unmounts
+  useEffect(() => {
+    return () => {
+      const restoreBrightness = async () => {
+        try {
+          await Brightness.setBrightnessAsync(originalBrightness);
+        } catch (error) {
+          console.warn('Could not restore brightness on unmount:', error);
+        }
+      };
+      restoreBrightness();
+    };
+  }, [originalBrightness]);
 
   const pickImageFromGallery = async () => {
     try {
@@ -67,7 +119,28 @@ export default function CameraModal() {
   };
 
   const toggleCameraFacing = () => {
-    setFacing(current => (current === 'back' ? 'front' : 'back'));
+    setFacing(current => {
+      const newFacing = current === 'back' ? 'front' : 'back';
+      // Reset front camera flash when switching cameras
+      if (newFacing === 'back') {
+        setFrontCameraFlash(false);
+      }
+      return newFacing;
+    });
+  };
+
+  const toggleFlash = () => {
+    if (facing === 'front') {
+      // For front camera, simulate flash with white border and higher contrast
+      setFrontCameraFlash(current => !current);
+    } else {
+      // For back camera, use normal flash
+      setFlash(current => {
+        if (current === 'off') return 'on';
+        if (current === 'on') return 'auto';
+        return 'off';
+      });
+    }
   };
 
   const takePicture = async () => {
@@ -135,9 +208,23 @@ export default function CameraModal() {
       <StatusBar barStyle="light-content" backgroundColor="transparent" translucent />
       <CameraView
         ref={cameraRef}
-        style={styles.camera}
+        style={[
+          styles.camera,
+          facing === 'front' && frontCameraFlash && styles.frontCameraFlash
+        ]}
         facing={facing}
+        flash={facing === 'front' ? 'off' : flash}
+        enableTorch={facing === 'front' ? frontCameraFlash : flash !== 'off'}
       />
+      
+      {/* Enhanced flash overlay for front camera flash simulation */}
+      {facing === 'front' && frontCameraFlash && (
+        <>
+          <View style={styles.flashScreenOverlay} />
+          <View style={styles.flashSpecularOverlay} />
+          <View style={styles.flashBrightnessOverlay} />
+        </>
+      )}
       
       <View style={styles.overlay}>
         <View style={[styles.header, { paddingTop: Math.max(insets.top + 10, 20) }]}>
@@ -153,15 +240,26 @@ export default function CameraModal() {
             <Text style={styles.headerText}>Dental Scan</Text>
             <Text style={styles.instructionText}>Position your teeth in the frame</Text>
           </View>
-          <View style={styles.headerRight} />
+          <TouchableOpacity 
+            style={[
+              styles.flashButton, 
+              (facing === 'front' ? frontCameraFlash : flash !== 'off') && styles.flashButtonActive
+            ]}
+            onPress={toggleFlash}
+            activeOpacity={0.7}
+          >
+            <IconSymbol 
+              name={
+                facing === 'front' 
+                  ? (frontCameraFlash ? 'bolt.fill' : 'bolt.slash')
+                  : (flash === 'off' ? 'bolt.slash' : flash === 'on' ? 'bolt.fill' : 'bolt')
+              } 
+              size={20} 
+              color="white" 
+            />
+          </TouchableOpacity>
         </View>
         
-        <View style={styles.scanFrame}>
-          <View style={styles.corner} />
-          <View style={[styles.corner, styles.topRight]} />
-          <View style={[styles.corner, styles.bottomLeft]} />
-          <View style={[styles.corner, styles.bottomRight]} />
-        </View>
         
         <View style={[styles.controls, { paddingBottom: Math.max(insets.bottom + 20, 40) }]}>
           <View style={styles.controlsRow}>
@@ -231,7 +329,7 @@ const styles = StyleSheet.create({
     width: 44,
   },
   headerText: {
-    fontSize: 24,
+    fontSize: 20,
     fontWeight: 'bold',
     color: 'white',
     textShadowColor: 'rgba(0, 0, 0, 0.75)',
@@ -239,56 +337,13 @@ const styles = StyleSheet.create({
     textShadowRadius: 10,
   },
   instructionText: {
-    fontSize: 16,
+    fontSize: 14,
     color: 'white',
-    marginTop: 8,
+    marginTop: 6,
     textAlign: 'center',
     textShadowColor: 'rgba(0, 0, 0, 0.75)',
     textShadowOffset: { width: -1, height: 1 },
     textShadowRadius: 10,
-  },
-  scanFrame: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginHorizontal: 40,
-    marginVertical: 100,
-    position: 'relative',
-  },
-  corner: {
-    position: 'absolute',
-    width: 30,
-    height: 30,
-    borderColor: 'white',
-    top: 0,
-    left: 0,
-    borderTopWidth: 3,
-    borderLeftWidth: 3,
-  },
-  topRight: {
-    top: 0,
-    right: 0,
-    left: 'auto',
-    borderTopWidth: 3,
-    borderRightWidth: 3,
-    borderLeftWidth: 0,
-  },
-  bottomLeft: {
-    bottom: 0,
-    top: 'auto',
-    borderBottomWidth: 3,
-    borderLeftWidth: 3,
-    borderTopWidth: 0,
-  },
-  bottomRight: {
-    bottom: 0,
-    right: 0,
-    top: 'auto',
-    left: 'auto',
-    borderBottomWidth: 3,
-    borderRightWidth: 3,
-    borderTopWidth: 0,
-    borderLeftWidth: 0,
   },
   controls: {
     alignItems: 'center',
@@ -371,5 +426,56 @@ const styles = StyleSheet.create({
     color: 'white',
     fontSize: 16,
     fontWeight: '600',
+  },
+  flashButton: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  flashButtonActive: {
+    backgroundColor: 'rgba(255, 255, 255, 0.3)',
+  },
+  // Front camera flash simulation styles
+  frontCameraFlash: {
+    // 100% contrast for maximum flash simulation
+    filter: 'contrast(1.0) brightness(2.0) saturate(1.5)',
+  },
+  flashScreenOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: 'rgba(255, 255, 255, 0.6)',
+    pointerEvents: 'none',
+  },
+  flashSpecularOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: 'rgba(255, 255, 255, 0.4)',
+    pointerEvents: 'none',
+    shadowColor: 'white',
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.9,
+    shadowRadius: 50,
+  },
+  flashBrightnessOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: 'rgba(255, 255, 255, 0.2)',
+    pointerEvents: 'none',
+    shadowColor: 'white',
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.7,
+    shadowRadius: 40,
   },
 });

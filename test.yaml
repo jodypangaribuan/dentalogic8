@@ -1,0 +1,28 @@
+backbone:
+  # Layer 0: Initial conv (3->16, k=3, s=2, HS)
+  - [-1, 1,conv, [16, 3, 2, None, 1, nn.Hardswish]]
+  
+  # Layers 1-2: Approx IR1 & IR2 (s=2 lagi untuk stride=8, 16->24)
+  - [-1, 1,conv, [16, 3, 2, None, 1, nn.Hardswish]]  # Approx IR1 (s=2)
+  - [-1, 1,conv, [24, 3, 2, None, 1, nn.Hardswish]]  # Approx IR2 -> P3
+  - [2, 1, Identity, []]  # P3: 24ch, stride=8 (branch dari layer 2)
+  
+  # Layers 3: Approx IR3 (24->24, s=1)
+  - [-1, 1,conv, [24, 3, 1, None, 1, nn.Hardswish]]
+  
+  # Layers 4-6: Approx IR4-IR6 (24->40->40->40, s=2 di awal untuk stride=16)
+  - [-1, 1,conv, [40, 5, 2, 2, 1, nn.Hardswish]]  # Approx IR4 (k=5, s=2)
+  - [-1, 1,conv, [40, 5, 1, 2, 1, nn.Hardswish]]  # Approx IR5
+  - [-1, 1,conv, [40, 5, 1, 2, 1, nn.Hardswish]]  # Approx IR6
+  
+  # Layers 7-8: Approx IR7-IR8 (40->48->48, s=1)
+  - [-1, 1,conv, [48, 5, 1, 2, 1, nn.Hardswish]]  # Approx IR7
+  - [-1, 1,conv, [48, 5, 1, 2, 1, nn.Hardswish]]  # Approx IR8 -> P4
+  - [8, 1, Identity, []]  # P4: 48ch, stride=16 (branch dari layer 8)
+  
+  # Layers 9-11: Approx IR9-IR11 (48->96->96->96, s=2 di awal untuk stride=32)
+  - [-1, 1, Conv, [96, 5, 2, 2, 1, nn.Hardswish]]  # Approx IR9 (s=2)
+  - [-1, 1, Conv, [96, 5, 1, 2, 1, nn.Hardswish]]  # Approx IR10
+  - [-1, 1, Conv, [96, 5, 1, 2, 1, nn.Hardswish]]  # Approx IR11 -> P5
+  - [11, 1, Identity, []]  # P5: 96ch, stride=32 (branch dari layer 11)
+  

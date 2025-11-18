@@ -13,7 +13,7 @@ export default function HomeScreen() {
     }, [])
   );
   return (
-    <SafeAreaView style={[styles.container, { backgroundColor: Colors.light.background }]}>
+    <SafeAreaView style={[styles.container, { backgroundColor: Colors.light.background }]} edges={['top']}>
       <View style={styles.content}>
         <Text style={[styles.title, { color: Colors.light.text }]}>
           

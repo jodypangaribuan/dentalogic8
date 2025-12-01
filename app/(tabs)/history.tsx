@@ -88,11 +88,11 @@ export default function HistoryScreen() {
   // Filter and search logic
   const filteredScans = mockScanHistory.filter(scan => {
     const matchesSearch = scan.scanType.toLowerCase().includes(searchQuery.toLowerCase()) ||
-                         scan.findings.some(finding => finding.toLowerCase().includes(searchQuery.toLowerCase())) ||
-                         scan.riskLevel.toLowerCase().includes(searchQuery.toLowerCase());
-    
+      scan.findings.some(finding => finding.toLowerCase().includes(searchQuery.toLowerCase())) ||
+      scan.riskLevel.toLowerCase().includes(searchQuery.toLowerCase());
+
     const matchesFilter = filterStatus === 'All' || scan.riskLevel === filterStatus;
-    
+
     return matchesSearch && matchesFilter;
   });
 
@@ -142,10 +142,10 @@ export default function HistoryScreen() {
   };
 
   const renderScanItem = ({ item }: { item: typeof mockScanHistory[0] }) => (
-    <TouchableOpacity 
+    <TouchableOpacity
       style={[
-        styles.scanItem, 
-        { 
+        styles.scanItem,
+        {
           backgroundColor: Colors.light.background,
           borderColor: Colors.light.icon,
           shadowColor: '#000',
@@ -201,7 +201,7 @@ export default function HistoryScreen() {
             </Text>
           </View>
         </View>
-        
+
         <View style={styles.riskLevelRow}>
           <Text style={[styles.riskLevelLabel, { color: Colors.light.text }]}>
             Tingkat Risiko:
@@ -256,11 +256,11 @@ export default function HistoryScreen() {
           Pantau perkembangan kesehatan gigi Anda
         </Text>
       </View>
-      
+
       {/* Search and Filter Controls */}
       <View style={styles.controlsContainer}>
         <TextInput
-          style={[styles.searchInput, { 
+          style={[styles.searchInput, {
             backgroundColor: Colors.light.background,
             borderColor: Colors.light.icon,
             color: Colors.light.text
@@ -270,7 +270,7 @@ export default function HistoryScreen() {
           value={searchQuery}
           onChangeText={setSearchQuery}
         />
-        
+
         <View style={styles.filterContainer}>
           {['All', 'Low', 'Medium', 'High'].map((risk) => (
             <TouchableOpacity
@@ -306,7 +306,7 @@ export default function HistoryScreen() {
       ) : (
         <View style={styles.emptyState}>
           <Text style={[styles.emptyText, { color: Colors.light.icon }]}>
-            {mockScanHistory.length === 0 
+            {mockScanHistory.length === 0
               ? "Belum ada scan karies. Mulai dengan melakukan scan gigi pertama Anda!"
               : "Tidak ada scan yang sesuai dengan kriteria pencarian."
             }

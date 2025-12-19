@@ -25,7 +25,7 @@ export default function CameraModal() {
     if (params.from) {
       return params.from as string;
     }
-    
+
     // Default logic: check current navigation state
     // This is a simple approach - in a real app you might want more sophisticated tracking
     return 'home'; // default to home
@@ -47,7 +47,7 @@ export default function CameraModal() {
         console.warn('Could not get brightness:', error);
       }
     };
-    
+
     getOriginalBrightness();
   }, []);
 
@@ -88,11 +88,11 @@ export default function CameraModal() {
     try {
       // Request media library permissions
       const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
-      
+
       if (status !== 'granted') {
         Alert.alert(
-          'Permission Required',
-          'Please grant permission to access your photo library to upload images.',
+          'Izin Diperlukan',
+          'Mohon berikan izin untuk mengakses galeri foto Anda untuk mengunggah gambar.',
           [{ text: 'OK' }]
         );
         return;
@@ -109,12 +109,12 @@ export default function CameraModal() {
       if (!result.canceled && result.assets[0]) {
         const selectedImage = result.assets[0];
         console.log('Image selected from gallery:', selectedImage.uri);
-        Alert.alert('Success', 'Image selected from gallery successfully!');
+        Alert.alert('Berhasil', 'Gambar berhasil dipilih dari galeri!');
         // Handle the selected image here - same as camera capture
       }
     } catch (error) {
       console.error('Error picking image from gallery:', error);
-      Alert.alert('Error', 'Failed to select image from gallery');
+      Alert.alert('Kesalahan', 'Gagal memilih gambar dari galeri');
     }
   };
 
@@ -149,14 +149,14 @@ export default function CameraModal() {
         const photo = await cameraRef.current.takePictureAsync({
           quality: 0.8,
         });
-        
+
         // Handle the captured photo here
         console.log('Photo taken:', photo.uri);
-        Alert.alert('Success', 'Photo captured successfully!');
+        Alert.alert('Berhasil', 'Foto berhasil diambil!');
       }
     } catch (error) {
       console.error('Error taking picture:', error);
-      Alert.alert('Error', 'Failed to take picture');
+      Alert.alert('Kesalahan', 'Gagal mengambil foto');
     }
   };
 
@@ -175,8 +175,8 @@ export default function CameraModal() {
         <StatusBar barStyle="light-content" backgroundColor="transparent" translucent />
         <SafeAreaView style={styles.permissionContainer}>
           <View style={styles.backButtonContainer}>
-            <TouchableOpacity 
-              style={styles.backButton} 
+            <TouchableOpacity
+              style={styles.backButton}
               onPress={handleBack}
               activeOpacity={0.7}
               hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
@@ -186,16 +186,16 @@ export default function CameraModal() {
           </View>
           <View style={styles.content}>
             <Text style={[styles.title, { color: Colors.light.text }]}>
-              Camera Permission Required
+              Izin Kamera Diperlukan
             </Text>
             <Text style={[styles.subtitle, { color: Colors.light.icon }]}>
-              Please grant camera permission to use the scan feature
+              Mohon berikan izin kamera untuk menggunakan fitur pemindaian
             </Text>
-            <TouchableOpacity 
+            <TouchableOpacity
               style={styles.permissionButton}
               onPress={requestPermission}
             >
-              <Text style={styles.permissionButtonText}>Grant Permission</Text>
+              <Text style={styles.permissionButtonText}>Berikan Izin</Text>
             </TouchableOpacity>
           </View>
         </SafeAreaView>
@@ -216,7 +216,7 @@ export default function CameraModal() {
         flash={facing === 'front' ? 'off' : flash}
         enableTorch={facing === 'front' ? frontCameraFlash : flash !== 'off'}
       />
-      
+
       {/* Enhanced flash overlay for front camera flash simulation */}
       {facing === 'front' && frontCameraFlash && (
         <>
@@ -225,11 +225,11 @@ export default function CameraModal() {
           <View style={styles.flashBrightnessOverlay} />
         </>
       )}
-      
+
       <View style={styles.overlay}>
         <View style={[styles.header, { paddingTop: Math.max(insets.top + 10, 20) }]}>
-          <TouchableOpacity 
-            style={styles.backButton} 
+          <TouchableOpacity
+            style={styles.backButton}
             onPress={handleBack}
             activeOpacity={0.7}
             hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
@@ -237,47 +237,47 @@ export default function CameraModal() {
             <IconSymbol name="chevron.left" size={24} color="white" />
           </TouchableOpacity>
           <View style={styles.headerContent}>
-            <Text style={styles.headerText}>Dental Scan</Text>
-            <Text style={styles.instructionText}>Position your teeth in the frame</Text>
+            <Text style={styles.headerText}>Pemindaian Gigi</Text>
+            <Text style={styles.instructionText}>Posisikan gigi Anda di dalam bingkai</Text>
           </View>
-          <TouchableOpacity 
+          <TouchableOpacity
             style={[
-              styles.flashButton, 
+              styles.flashButton,
               (facing === 'front' ? frontCameraFlash : flash !== 'off') && styles.flashButtonActive
             ]}
             onPress={toggleFlash}
             activeOpacity={0.7}
           >
-            <IconSymbol 
+            <IconSymbol
               name={
-                facing === 'front' 
+                facing === 'front'
                   ? (frontCameraFlash ? 'bolt.fill' : 'bolt.slash')
                   : (flash === 'off' ? 'bolt.slash' : flash === 'on' ? 'bolt.fill' : 'bolt')
-              } 
-              size={20} 
-              color="white" 
+              }
+              size={20}
+              color="white"
             />
           </TouchableOpacity>
         </View>
-        
-        
+
+
         <View style={[styles.controls, { paddingBottom: Math.max(insets.bottom + 20, 40) }]}>
           <View style={styles.controlsRow}>
-            <TouchableOpacity 
+            <TouchableOpacity
               style={styles.galleryButton}
               onPress={pickImageFromGallery}
             >
               <IconSymbol name="photo" size={24} color="white" />
             </TouchableOpacity>
-            
-            <TouchableOpacity 
+
+            <TouchableOpacity
               style={styles.captureButton}
               onPress={takePicture}
             >
               <View style={styles.captureButtonInner} />
             </TouchableOpacity>
-            
-            <TouchableOpacity 
+
+            <TouchableOpacity
               style={styles.flipButton}
               onPress={toggleCameraFacing}
             >

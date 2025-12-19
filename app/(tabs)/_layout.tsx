@@ -51,12 +51,12 @@ export default function TabLayout() {
       <Tabs.Screen
         name="index"
         options={{
-          title: 'Home',
+          title: 'Beranda',
           tabBarIcon: ({ color, focused }) => (
-            <IconSymbol 
-              size={focused ? 26 : 24} 
-              name={focused ? "house.fill" : "house"} 
-              color={color} 
+            <IconSymbol
+              size={focused ? 26 : 24}
+              name={focused ? "house.fill" : "house"}
+              color={color}
             />
           ),
           tabBarItemStyle: {
@@ -69,12 +69,12 @@ export default function TabLayout() {
       <Tabs.Screen
         name="scan"
         options={{
-          title: 'Scan',
+          title: 'Pindai',
           tabBarIcon: ({ color, focused }) => (
-            <IconSymbol 
-              size={focused ? 26 : 24} 
-              name={focused ? "camera.fill" : "camera"} 
-              color={color} 
+            <IconSymbol
+              size={focused ? 26 : 24}
+              name={focused ? "camera.fill" : "camera"}
+              color={color}
             />
           ),
           tabBarItemStyle: {
@@ -87,12 +87,12 @@ export default function TabLayout() {
       <Tabs.Screen
         name="history"
         options={{
-          title: 'History',
+          title: 'Riwayat',
           tabBarIcon: ({ color, focused }) => (
-            <IconSymbol 
-              size={focused ? 26 : 24} 
-              name={focused ? "clock.arrow.circlepath" : "clock"} 
-              color={color} 
+            <IconSymbol
+              size={focused ? 26 : 24}
+              name={focused ? "clock.arrow.circlepath" : "clock"}
+              color={color}
             />
           ),
           tabBarItemStyle: {

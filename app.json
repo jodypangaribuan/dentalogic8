@@ -10,7 +10,13 @@
     "newArchEnabled": true,
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.jodypangaribuan.dentalogic8"
+      "bundleIdentifier": "com.jodypangaribuan.dentalogic8",
+      "config": {
+        "usesNonExemptEncryption": false
+      },
+      "infoPlist": {
+        "ITSAppUsesNonExemptEncryption": false
+      }
     },
     "android": {
       "adaptiveIcon": {
@@ -21,7 +27,11 @@
       },
       "edgeToEdgeEnabled": true,
       "predictiveBackGestureEnabled": false,
-      "package": "com.jodypangaribuan.dentalogic8"
+      "package": "com.jodypangaribuan.dentalogic8",
+      "permissions": [
+        "android.permission.CAMERA",
+        "android.permission.RECORD_AUDIO"
+      ]
     },
     "web": {
       "output": "static",
@@ -29,7 +39,6 @@
     },
     "plugins": [
       "expo-router",
-      "onnxruntime-react-native",
       [
         "expo-splash-screen",
         {
@@ -41,11 +50,31 @@
             "backgroundColor": "#000000"
           }
         }
+      ],
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "Allow DentaLogic to access your camera for dental screening."
+        }
+      ],
+      [
+        "expo-build-properties",
+        {
+          "ios": {
+            "deploymentTarget": "15.1"
+          }
+        }
       ]
     ],
     "experiments": {
       "typedRoutes": true,
       "reactCompiler": true
+    },
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "ec57ec79-6143-419d-b4b3-0aa0685b9616"
+      }
     }
   }
 }

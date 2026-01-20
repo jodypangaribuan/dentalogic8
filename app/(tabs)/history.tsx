@@ -1,432 +1,285 @@
+
 import { IconSymbol } from '@/components/ui/icon-symbol';
 import { Colors } from '@/constants/theme';
+import { HistoryItem, HistoryService } from '@/utils/history-service';
 import { navigationTracker } from '@/utils/navigation-tracker';
-import { useFocusEffect } from 'expo-router';
+import { Image } from 'expo-image';
+import { router, useFocusEffect } from 'expo-router';
 import React, { useCallback, useState } from 'react';
-import { FlatList, Modal, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { Alert, Dimensions, FlatList, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
-const mockScanHistory = [
-  {
-    id: '1',
-    date: '15 Des 2024',
-    time: '14:30',
-    scanType: 'Deteksi Karies',
-    status: 'Selesai',
-    scanQuality: 'Tinggi',
-    cariesDetected: 2,
-    riskLevel: 'Sedang',
-    findings: ['Karies terdeteksi pada gigi geraham atas kanan', 'Karies ringan pada gigi premolar bawah'],
-    confidence: 94,
-    distribution: { 'D0': 2, 'D1': 1, 'D2': 1, 'D3': 0, 'D4': 0, 'D5': 0, 'D6': 0, 'D7': 0 }
-  },
-  {
-    id: '2',
-    date: '12 Des 2024',
-    time: '09:15',
-    scanType: 'Deteksi Karies',
-    status: 'Selesai',
-    scanQuality: 'Tinggi',
-    cariesDetected: 0,
-    riskLevel: 'Rendah',
-    findings: ['Tidak ada karies terdeteksi', 'Gigi dalam kondisi sehat'],
-    confidence: 98,
-    distribution: { 'D0': 5, 'D1': 0, 'D2': 0, 'D3': 0, 'D4': 0, 'D5': 0, 'D6': 0, 'D7': 0 }
-  },
-  {
-    id: '3',
-    date: '08 Des 2024',
-    time: '16:45',
-    scanType: 'Deteksi Karies',
-    status: 'Selesai',
-    scanQuality: 'Sedang',
-    cariesDetected: 1,
-    riskLevel: 'Tinggi',
-    findings: ['Karies dalam terdeteksi pada gigi geraham bawah'],
-    confidence: 87,
-    distribution: { 'D0': 1, 'D1': 0, 'D2': 0, 'D3': 1, 'D4': 0, 'D5': 0, 'D6': 0, 'D7': 0 }
-  },
-  {
-    id: '4',
-    date: '05 Des 2024',
-    time: '11:20',
-    scanType: 'Deteksi Karies',
-    status: 'Selesai',
-    scanQuality: 'Tinggi',
-    cariesDetected: 3,
-    riskLevel: 'Tinggi',
-    findings: ['Multiple karies terdeteksi', 'Perlu perawatan segera'],
-    confidence: 92,
-    distribution: { 'D0': 0, 'D1': 2, 'D2': 1, 'D3': 0, 'D4': 1, 'D5': 0, 'D6': 0, 'D7': 0 }
-  },
-  {
-    id: '5',
-    date: '01 Des 2024',
-    time: '13:00',
-    scanType: 'Deteksi Karies',
-    status: 'Selesai',
-    scanQuality: 'Tinggi',
-    cariesDetected: 0,
-    riskLevel: 'Rendah',
-    findings: ['Gigi sehat, tidak ada karies'],
-    confidence: 96,
-    distribution: { 'D0': 4, 'D1': 0, 'D2': 0, 'D3': 0, 'D4': 0, 'D5': 0, 'D6': 0, 'D7': 0 }
-  }
-];
+const { width: SCREEN_WIDTH } = Dimensions.get('window');
+
+// Reuse treatment/severity info map (simplified version for history)
+const SEVERITY_INFO: Record<string, { severity: string; color: string; bg: string }> = {
+  D0: { severity: 'Gigi Sehat', color: '#10B981', bg: '#ECFDF5' },
+  D1: { severity: 'Lesi Awal', color: '#EAB308', bg: '#FEF9C3' },
+  D2: { severity: 'Lesi Email', color: '#F97316', bg: '#FFEDD5' },
+  D3: { severity: 'Lesi Dentin Awal', color: '#EF4444', bg: '#FEE2E2' },
+  D4: { severity: 'Karies Dentin Dalam', color: '#EC4899', bg: '#FCE7F3' },
+  D5: { severity: 'Karies Mendekati Pulpa', color: '#8B5CF6', bg: '#EDE9FE' },
+  D6: { severity: 'Kerusakan Berat', color: '#3B82F6', bg: '#DBEAFE' },
+};
 
 export default function HistoryScreen() {
+  const [history, setHistory] = useState<HistoryItem[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
-  const [filterStatus, setFilterStatus] = useState('Semua');
-  const [selectedScan, setSelectedScan] = useState<typeof mockScanHistory[0] | null>(null);
+  const [selectedScan, setSelectedScan] = useState<HistoryItem | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
+
+  const loadHistory = async () => {
+    setIsLoading(true);
+    const data = await HistoryService.getHistory();
+    setHistory(data);
+    setIsLoading(false);
+  };
 
   useFocusEffect(
     useCallback(() => {
       navigationTracker.setLastVisitedTab('history');
+      loadHistory();
     }, [])
   );
 
-  const filteredScans = mockScanHistory.filter(scan => {
-    const matchesSearch = scan.scanType.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      scan.findings.some(finding => finding.toLowerCase().includes(searchQuery.toLowerCase())) ||
-      scan.riskLevel.toLowerCase().includes(searchQuery.toLowerCase());
+  const handleDelete = (id: string) => {
+    Alert.alert(
+      "Hapus Riwayat",
+      "Apakah Anda yakin ingin menghapus data ini?",
+      [
+        { text: "Batal", style: "cancel" },
+        {
+          text: "Hapus",
+          style: "destructive",
+          onPress: async () => {
+            await HistoryService.deleteItem(id);
+            loadHistory(); // Reload
+            if (selectedScan?.id === id) setSelectedScan(null);
+          }
+        }
+      ]
+    );
+  };
 
-    const matchesFilter = filterStatus === 'Semua' || scan.riskLevel === filterStatus;
-    return matchesSearch && matchesFilter;
+  const filteredHistory = history.filter(item => {
+    const info = SEVERITY_INFO[item.label] || { severity: item.label };
+    return (
+      item.label.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      info.severity.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      item.dateStr.toLowerCase().includes(searchQuery.toLowerCase())
+    );
   });
 
-  const getRiskColor = (risk: string) => {
-    switch (risk) {
-      case 'Tinggi': return { bg: '#FEF2F2', text: '#EF4444' };
-      case 'Sedang': return { bg: '#FFFBEB', text: '#F59E0B' };
-      case 'Rendah': return { bg: '#F0FDF4', text: '#22C55E' };
-      default: return { bg: '#F1F5F9', text: Colors.light.icon };
-    }
-  };
-
-  const getSuggestion = (risk: string) => {
-    switch (risk) {
-      case 'Tinggi':
-        return 'Kondisi memerlukan perhatian medis segera. Disarankan untuk segera menjadwalkan pertemuan dengan dokter gigi untuk perawatan profesional (seperti penambalan atau perawatan akar) agar karies tidak semakin parah.';
-      case 'Sedang':
-        return 'Terdeteksi indikasi karies awal. Disarankan untuk melakukan konsultasi dengan dokter gigi dalam waktu dekat dan meningkatkan intensitas pembersihan gigi (flossing dan obat kumur).';
-      case 'Rendah':
-      default:
-        return 'Kesehatan gigi Anda terlihat baik. Pertahankan kebiasaan menyikat gigi 2 kali sehari, gunakan pasta gigi berfluoride, dan rutin lakukan check-up ke dokter gigi setiap 6 bulan.';
-    }
-  };
-
-  const renderScanItem = ({ item }: { item: typeof mockScanHistory[0] }) => {
-    const riskStyles = getRiskColor(item.riskLevel);
+  const renderScanItem = ({ item }: { item: HistoryItem }) => {
+    const info = SEVERITY_INFO[item.label] || { severity: item.label, color: Colors.light.text, bg: '#F1F5F9' };
+    const detectionCount = item.detections.length;
 
     return (
-      <TouchableOpacity style={styles.historyCard} activeOpacity={0.7} onPress={() => setSelectedScan(item)}>
-        <View style={styles.cardHeader}>
-          <View style={styles.dateBox}>
-            <Text style={styles.dateText}>{item.date}</Text>
-            <Text style={styles.timeText}>{item.time}</Text>
-          </View>
-          <View style={[styles.riskBadge, { backgroundColor: riskStyles.bg }]}>
-            <Text style={[styles.riskText, { color: riskStyles.text }]}>Risiko {item.riskLevel}</Text>
-          </View>
-        </View>
+      <View style={styles.historyCardContainer}>
+        <TouchableOpacity
+          style={styles.historyCard}
+          activeOpacity={0.7}
+          onPress={() => {
+            router.push({
+              pathname: '/analysis-detail',
+              params: {
+                imageUri: item.imageUri,
+                label: item.label,
+                confidence: item.confidence.toString(),
+                detections: JSON.stringify(item.detections),
+                inferenceTime: item.inferenceTime.toString(),
+                source: item.source,
+                imageWidth: item.imageWidth.toString(),
+                imageHeight: item.imageHeight.toString()
+              }
+            });
+          }}
+        >
+          <Image
+            source={{ uri: item.imageUri }}
+            style={styles.cardImage}
+            contentFit="cover"
+            transition={200}
+          />
 
-        <View style={styles.cardContent}>
-          <View style={styles.mainInfo}>
-            <Text style={styles.scanTypeText}>{item.scanType}</Text>
-            <Text style={styles.confidenceText}>Keyakinan: {item.confidence}%</Text>
-          </View>
-
-          <View style={styles.statsRow}>
-            <View style={styles.statItem}>
-              <Text style={styles.statLabel}>Karies</Text>
-              <Text style={styles.statValue}>{item.cariesDetected}</Text>
+          <View style={styles.cardContent}>
+            <View style={styles.cardHeader}>
+              <View style={[styles.badgeContainer, { backgroundColor: info.bg }]}>
+                <Text style={[styles.badgeText, { color: info.color }]}>{item.label}</Text>
+              </View>
+              <Text style={styles.dateText}>{item.dateStr}</Text>
             </View>
-            <View style={styles.statDivider} />
-            <View style={styles.statItem}>
-              <Text style={styles.statLabel}>Kualitas</Text>
-              <Text style={styles.statValue}>{item.scanQuality}</Text>
+
+            <Text style={styles.severityTitle} numberOfLines={1}>{info.severity}</Text>
+
+            <View style={styles.statsRow}>
+              <View style={styles.statItem}>
+                <IconSymbol name="scope" size={12} color={Colors.light.icon} />
+                <Text style={styles.statText}>{detectionCount} Deteksi</Text>
+              </View>
+              <View style={styles.statItem}>
+                <IconSymbol name="checkmark.shield.fill" size={12} color={Colors.light.icon} />
+                <Text style={styles.statText}>{(item.confidence * 100).toFixed(0)}% Akurat</Text>
+              </View>
             </View>
           </View>
 
-          <View style={styles.findingsBox}>
-            <Text style={styles.findingsSummary} numberOfLines={2}>
-              {item.findings.join(' • ')}
-            </Text>
-          </View>
-        </View>
+          <IconSymbol name="chevron.right" size={20} color="#CBD5E1" style={styles.chevron} />
+        </TouchableOpacity>
 
-        <View style={styles.cardFooter}>
-          <Text style={styles.viewDetailText}>Lihat Detail Analisis</Text>
-          <IconSymbol name="chevron.right" size={14} color={Colors.light.tint} />
-        </View>
-      </TouchableOpacity>
+        <TouchableOpacity
+          style={styles.deleteAction}
+          onPress={() => handleDelete(item.id)}
+          hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+        >
+          <IconSymbol name="trash.fill" size={18} color="#EF4444" />
+        </TouchableOpacity>
+      </View>
     );
   };
 
   return (
-    <SafeAreaView style={[styles.container, { backgroundColor: '#F8FAFC' }]} edges={['top']}>
+    <SafeAreaView style={styles.container} edges={['top']}>
       <View style={styles.header}>
-        <Text style={styles.title}>Riwayat Analisis</Text>
-        <Text style={styles.subtitle}>Data pemindaian gigi Anda sebelumnya</Text>
+        <Text style={styles.title}>Riwayat</Text>
+        <Text style={styles.subtitle}>{history.length} Analisis Tersimpan</Text>
       </View>
 
-      <View style={styles.controls}>
-        <View style={styles.searchContainer}>
-          <IconSymbol name="magnifyingglass" size={18} color={Colors.light.icon} />
-          <TextInput
-            style={styles.searchInput}
-            placeholder="Cari riwayat..."
-            value={searchQuery}
-            onChangeText={setSearchQuery}
-          />
-        </View>
-
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.filterScroll}>
-          {['Semua', 'Rendah', 'Sedang', 'Tinggi'].map((risk) => (
-            <TouchableOpacity
-              key={risk}
-              style={[
-                styles.filterTab,
-                filterStatus === risk && styles.filterTabActive
-              ]}
-              onPress={() => setFilterStatus(risk)}
-            >
-              <Text style={[
-                styles.filterTabText,
-                filterStatus === risk && styles.filterTabTextActive
-              ]}>
-                {risk}
-              </Text>
-            </TouchableOpacity>
-          ))}
-        </ScrollView>
+      <View style={styles.searchContainer}>
+        <IconSymbol name="magnifyingglass" size={20} color="#94A3B8" />
+        <TextInput
+          style={styles.searchInput}
+          placeholder="Cari riwayat..."
+          value={searchQuery}
+          onChangeText={setSearchQuery}
+          placeholderTextColor="#94A3B8"
+        />
       </View>
 
       <FlatList
-        data={filteredScans}
+        data={filteredHistory}
         renderItem={renderScanItem}
         keyExtractor={(item) => item.id}
         contentContainerStyle={styles.listContent}
         showsVerticalScrollIndicator={false}
         ListEmptyComponent={
           <View style={styles.emptyContainer}>
-            <IconSymbol name="doc.text.magnifyingglass" size={48} color="#CBD5E1" />
-            <Text style={styles.emptyText}>Tidak ada riwayat ditemukan</Text>
+            <Image
+              source={require('../../assets/images/react-logo.png')} // Fallback
+              style={{ width: 80, height: 80, opacity: 0.1, marginBottom: 16 }}
+              tintColor={Colors.light.icon}
+            />
+            <Text style={styles.emptyTitle}>Belum Ada Riwayat</Text>
+            <Text style={styles.emptyText}>Lakukan analisis gigi pertama Anda untuk melihat hasilnya di sini.</Text>
+
+            <TouchableOpacity style={styles.ctaButton} onPress={() => router.push('/(tabs)/scan')}>
+              <Text style={styles.ctaButtonText}>Mulai Analisis</Text>
+            </TouchableOpacity>
           </View>
         }
       />
-      <Modal
-        visible={selectedScan !== null}
-        animationType="slide"
-        transparent={true}
-        onRequestClose={() => setSelectedScan(null)}
-      >
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
-            <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>Detail Analisis</Text>
-              <TouchableOpacity onPress={() => setSelectedScan(null)} style={styles.closeButton}>
-                <IconSymbol name="xmark" size={20} color={Colors.light.icon} />
-              </TouchableOpacity>
-            </View>
-
-            {selectedScan && (
-              <ScrollView showsVerticalScrollIndicator={false}>
-                <View style={[styles.detailRiskBadge, { backgroundColor: getRiskColor(selectedScan.riskLevel).bg }]}>
-                  <Text style={[styles.detailRiskText, { color: getRiskColor(selectedScan.riskLevel).text }]}>
-                    Risiko {selectedScan.riskLevel}
-                  </Text>
-                </View>
-
-                <View style={styles.detailSection}>
-                  <Text style={styles.detailLabel}>Waktu Pemindaian</Text>
-                  <Text style={styles.detailValue}>{selectedScan.date}, {selectedScan.time}</Text>
-                </View>
-
-                <View style={styles.detailSection}>
-                  <Text style={styles.detailLabel}>Tingkat Kepercayaan AI</Text>
-                  <View style={styles.detailConfidenceRow}>
-                    <Text style={styles.detailConfidenceValue}>{selectedScan.confidence}%</Text>
-                    <View style={styles.detailProgressBarBg}>
-                      <View style={[styles.detailProgressBarFill, { width: `${selectedScan.confidence}%` }]} />
-                    </View>
-                  </View>
-                </View>
-
-                <View style={styles.detailSection}>
-                  <Text style={styles.detailLabel}>Distribusi Temuan</Text>
-                  <View style={styles.countsGrid}>
-                    {Object.entries(selectedScan.distribution || {}).map(([cls, count]) => (
-                      <View
-                        key={cls}
-                        style={[
-                          styles.countItem,
-                          count > 0 ? styles.countItemActive : styles.countItemEmpty
-                        ]}
-                      >
-                        <Text style={[styles.countClass, count > 0 && styles.countTextActive]}>{cls}</Text>
-                        <Text style={[styles.countValue, count > 0 && styles.countTextActive]}>{count}</Text>
-                      </View>
-                    ))}
-                  </View>
-                </View>
-
-                <View style={styles.detailSection}>
-                  <Text style={styles.detailLabel}>Temuan Detail</Text>
-                  {selectedScan.findings.map((finding, index) => (
-                    <View key={index} style={styles.findingItem}>
-                      <IconSymbol name="checkmark.circle.fill" size={16} color={Colors.light.tint} />
-                      <Text style={styles.findingItemText}>{finding}</Text>
-                    </View>
-                  ))}
-                </View>
-
-                <View style={styles.suggestionBox}>
-                  <View style={styles.suggestionHeader}>
-                    <IconSymbol name="lightbulb.fill" size={18} color="#0EA5E9" />
-                    <Text style={styles.suggestionTitle}>Saran Penanganan</Text>
-                  </View>
-                  <Text style={styles.suggestionText}>
-                    {getSuggestion(selectedScan.riskLevel)}
-                  </Text>
-                </View>
-
-                <TouchableOpacity
-                  style={styles.closeModalButton}
-                  onPress={() => setSelectedScan(null)}
-                >
-                  <Text style={styles.closeModalButtonText}>Tutup</Text>
-                </TouchableOpacity>
-              </ScrollView>
-            )}
-          </View>
-        </View>
-      </Modal>
     </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1 },
+  container: { flex: 1, backgroundColor: '#F8FAFC' },
   header: { padding: 24, paddingBottom: 16 },
-  title: { fontSize: 24, fontWeight: '800', color: Colors.light.text },
-  subtitle: { fontSize: 14, color: Colors.light.icon, marginTop: 4 },
+  title: { fontSize: 28, fontWeight: '800', color: Colors.light.text, letterSpacing: -0.5 },
+  subtitle: { fontSize: 14, color: '#64748B', marginTop: 4, fontWeight: '500' },
 
-  controls: { paddingHorizontal: 24, paddingBottom: 16, gap: 12 },
   searchContainer: {
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: '#fff',
-    borderRadius: 12,
-    paddingHorizontal: 12,
-    height: 44,
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
-  },
-  searchInput: { flex: 1, marginLeft: 8, fontSize: 14 },
-  filterScroll: { gap: 8, paddingRight: 24 },
-  filterTab: {
+    marginHorizontal: 24,
+    marginBottom: 20,
     paddingHorizontal: 16,
-    paddingVertical: 8,
-    borderRadius: 20,
-    backgroundColor: '#fff',
+    height: 52,
+    borderRadius: 16,
+    shadowColor: '#64748B',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.05,
+    shadowRadius: 10,
+    elevation: 2,
     borderWidth: 1,
-    borderColor: '#E2E8F0',
+    borderColor: '#F1F5F9'
   },
-  filterTabActive: { backgroundColor: Colors.light.tint, borderColor: Colors.light.tint },
-  filterTabText: { fontSize: 13, fontWeight: '600', color: Colors.light.icon },
-  filterTabTextActive: { color: '#fff' },
+  searchInput: { flex: 1, marginLeft: 12, fontSize: 16, color: Colors.light.text, fontWeight: '500' },
 
   listContent: { padding: 24, paddingTop: 4, paddingBottom: 100 },
+  historyCardContainer: { flexDirection: 'row', alignItems: 'center', marginBottom: 16 },
   historyCard: {
+    flex: 1,
+    flexDirection: 'row',
     backgroundColor: '#fff',
     borderRadius: 20,
-    marginBottom: 16,
-    padding: 16,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.05,
-    shadowRadius: 8,
-    elevation: 2,
-  },
-  cardHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 16 },
-  dateBox: { gap: 2 },
-  dateText: { fontSize: 14, fontWeight: '700', color: Colors.light.text },
-  timeText: { fontSize: 12, color: Colors.light.icon },
-  riskBadge: { paddingHorizontal: 10, paddingVertical: 4, borderRadius: 8 },
-  riskText: { fontSize: 11, fontWeight: '700' },
-
-  cardContent: { gap: 12 },
-  mainInfo: { gap: 2 },
-  scanTypeText: { fontSize: 16, fontWeight: '700', color: Colors.light.text },
-  confidenceText: { fontSize: 12, color: Colors.light.icon },
-
-  statsRow: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#F8FAFC', padding: 12, borderRadius: 12 },
-  statItem: { flex: 1, alignItems: 'center' },
-  statLabel: { fontSize: 10, color: Colors.light.icon, textTransform: 'uppercase', letterSpacing: 0.5 },
-  statValue: { fontSize: 15, fontWeight: '700', color: Colors.light.text, marginTop: 2 },
-  statDivider: { width: 1, height: 24, backgroundColor: '#E2E8F0' },
-
-  findingsBox: { borderTopWidth: 1, borderTopColor: '#F1F5F9', paddingTop: 12 },
-  findingsSummary: { fontSize: 13, color: '#64748B', lineHeight: 18 },
-
-  cardFooter: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 12, paddingTop: 12, borderTopWidth: 1, borderTopColor: '#F1F5F9' },
-  viewDetailText: { fontSize: 13, fontWeight: '600', color: Colors.light.tint },
-
-  emptyContainer: { alignItems: 'center', justifyContent: 'center', marginTop: 60, gap: 12 },
-  emptyText: { fontSize: 14, color: Colors.light.icon },
-
-  modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' },
-  modalContent: {
-    backgroundColor: '#fff',
-    borderTopLeftRadius: 32,
-    borderTopRightRadius: 32,
-    padding: 24,
-    maxHeight: '85%',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: -4 },
-    shadowOpacity: 0.1,
-    shadowRadius: 10,
-    elevation: 10
-  },
-  modalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24 },
-  modalTitle: { fontSize: 20, fontWeight: '800', color: Colors.light.text },
-  closeButton: { width: 36, height: 36, borderRadius: 18, backgroundColor: '#F1F5F9', justifyContent: 'center', alignItems: 'center' },
-
-  detailRiskBadge: { alignSelf: 'flex-start', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 10, marginBottom: 20 },
-  detailRiskText: { fontSize: 13, fontWeight: '800' },
-
-  detailSection: { marginBottom: 24 },
-  detailLabel: { fontSize: 12, fontWeight: '600', color: Colors.light.icon, textTransform: 'uppercase', letterSpacing: 1, marginBottom: 8 },
-  detailValue: { fontSize: 16, fontWeight: '700', color: Colors.light.text },
-
-  countsGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
-  countItem: {
-    width: '22%',
-    paddingVertical: 8,
-    borderRadius: 10,
+    padding: 12,
     alignItems: 'center',
-    borderWidth: 1
+    shadowColor: '#64748B',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.06,
+    shadowRadius: 12,
+    elevation: 3,
+    borderWidth: 1,
+    borderColor: '#F8FAFC'
   },
-  countItemActive: { backgroundColor: Colors.light.tint, borderColor: Colors.light.tint },
-  countItemEmpty: { backgroundColor: '#F8FAFC', borderColor: '#E2E8F0' },
-  countClass: { fontSize: 10, fontWeight: '700', color: Colors.light.icon, marginBottom: 2 },
-  countValue: { fontSize: 16, fontWeight: '800', color: Colors.light.text },
-  countTextActive: { color: '#fff' },
+  deleteAction: {
+    marginLeft: 12,
+    padding: 12,
+    backgroundColor: '#FEF2F2',
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: '#FECACA'
+  },
+  cardImage: {
+    width: 72,
+    height: 72,
+    borderRadius: 14,
+    backgroundColor: '#F1F5F9',
+  },
+  cardContent: { flex: 1, marginLeft: 16, justifyContent: 'center' },
+  cardHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 },
+  badgeContainer: { paddingHorizontal: 8, paddingVertical: 2, borderRadius: 6 },
+  badgeText: { fontSize: 11, fontWeight: '800' },
+  dateText: { fontSize: 12, color: '#94A3B8', fontWeight: '500' },
 
-  detailConfidenceRow: { flexDirection: 'row', alignItems: 'center', gap: 12 },
-  detailConfidenceValue: { fontSize: 18, fontWeight: '800', color: Colors.light.text, width: 45 },
-  detailProgressBarBg: { flex: 1, height: 8, backgroundColor: '#F1F5F9', borderRadius: 4, overflow: 'hidden' },
-  detailProgressBarFill: { height: '100%', backgroundColor: Colors.light.tint, borderRadius: 4 },
+  severityTitle: { fontSize: 16, fontWeight: '700', color: Colors.light.text, marginBottom: 6 },
 
-  findingItem: { flexDirection: 'row', alignItems: 'flex-start', gap: 10, marginBottom: 12 },
-  findingItemText: { flex: 1, fontSize: 14, color: '#475569', lineHeight: 20 },
+  statsRow: { flexDirection: 'row', alignItems: 'center', gap: 12 },
+  statItem: { flexDirection: 'row', alignItems: 'center', gap: 4 },
+  statText: { fontSize: 12, color: '#64748B', fontWeight: '500' },
 
-  suggestionBox: { backgroundColor: '#F0F9FF', borderRadius: 16, padding: 16, marginTop: 8, marginBottom: 24, borderWidth: 1, borderColor: '#BAE6FD' },
-  suggestionHeader: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 8 },
-  suggestionTitle: { fontSize: 15, fontWeight: '700', color: '#0369A1' },
-  suggestionText: { fontSize: 14, color: '#0C4A6E', lineHeight: 20 },
+  chevron: { marginLeft: 8 },
 
-  closeModalButton: { backgroundColor: Colors.light.tint, paddingVertical: 16, borderRadius: 16, alignItems: 'center', marginTop: 8, marginBottom: 20 },
-  closeModalButtonText: { color: '#fff', fontSize: 16, fontWeight: '700' },
+  emptyContainer: { alignItems: 'center', marginTop: 60, paddingHorizontal: 40 },
+  emptyTitle: { fontSize: 18, fontWeight: '700', color: Colors.light.text, marginBottom: 8 },
+  emptyText: { fontSize: 14, color: '#64748B', textAlign: 'center', lineHeight: 22, marginBottom: 24 },
+  ctaButton: { backgroundColor: Colors.light.tint, paddingHorizontal: 24, paddingVertical: 14, borderRadius: 16, shadowColor: Colors.light.tint, shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.2, shadowRadius: 8 },
+  ctaButtonText: { color: '#fff', fontSize: 16, fontWeight: '700' },
+
+  modalContainer: { flex: 1, backgroundColor: '#fff', paddingTop: 12 },
+  modalDragIndicator: { width: 40, height: 4, backgroundColor: '#E2E8F0', borderRadius: 2, alignSelf: 'center', marginBottom: 20 },
+  modalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 24, marginBottom: 24 },
+  modalTitle: { fontSize: 24, fontWeight: '800', color: Colors.light.text },
+  modalDate: { fontSize: 14, color: '#64748B', fontWeight: '500', marginTop: 2 },
+  closeButton: {},
+
+  modalScroll: { flex: 1 },
+  imageWrapper: { marginHorizontal: 24, marginBottom: 24, borderRadius: 20, overflow: 'hidden', height: 320, backgroundColor: '#F8FAFC', borderWidth: 1, borderColor: '#F1F5F9' },
+  modalImage: { width: '100%', height: '100%' },
+
+  infoContainer: { paddingHorizontal: 24 },
+  mainStatCard: { flexDirection: 'row', alignItems: 'center', gap: 16, marginBottom: 24, backgroundColor: '#F8FAFC', padding: 16, borderRadius: 20 },
+  bigBadge: { paddingHorizontal: 12, paddingVertical: 6, borderRadius: 10 },
+  bigBadgeText: { fontSize: 16, fontWeight: '800' },
+  mainSeverityText: { fontSize: 18, fontWeight: '700', color: Colors.light.text, flex: 1 },
+
+  gridStats: { flexDirection: 'row', gap: 12, marginBottom: 32 },
+  gridItem: { flex: 1, backgroundColor: '#fff', padding: 12, borderRadius: 16, borderWidth: 1, borderColor: '#F1F5F9', alignItems: 'center', shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.03, shadowRadius: 6 },
+  gridLabel: { fontSize: 11, color: '#94A3B8', fontWeight: '600', marginBottom: 4, textTransform: 'uppercase' },
+  gridValue: { fontSize: 16, fontWeight: '800', color: Colors.light.text },
+
+  deleteButton: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, marginHorizontal: 24, padding: 18, backgroundColor: '#FEF2F2', borderRadius: 16, marginBottom: 40 },
+  deleteButtonText: { color: '#EF4444', fontWeight: '700', fontSize: 16 }
 });

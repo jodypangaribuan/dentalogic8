@@ -344,7 +344,7 @@ function processYoloOutput(
         return {
             bbox: [x1, y1, x2, y2] as [number, number, number, number],
             class: CARIES_CLASSES[nmsResult.classIds[idx]],
-            confidence: nmsResult.scores[idx] * 100,
+            confidence: nmsResult.scores[idx],
         };
     });
 

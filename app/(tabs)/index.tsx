@@ -1,6 +1,7 @@
 import { BoundingBoxImage } from '@/components/BoundingBoxImage';
 import { IconSymbol } from '@/components/ui/icon-symbol';
 import { Colors } from '@/constants/theme';
+import { HistoryService } from '@/utils/history-service';
 import { navigationTracker } from '@/utils/navigation-tracker';
 import { getInferenceMode, initializeLocalModel, predict } from '@/utils/prediction-service';
 import { Image } from 'expo-image';
@@ -128,6 +129,19 @@ export default function HomeScreen() {
           label: result.class,
           inferenceTime
         });
+
+        // Save to history
+        HistoryService.saveScan({
+          tempImageUri: selectedImage.uri,
+          label: result.class,
+          confidence: result.confidence || 0,
+          detections: result.detections || [],
+          imageWidth: selectedImage.width,
+          imageHeight: selectedImage.height,
+          inferenceTime: inferenceTime,
+          source: result.source || 'local'
+        }).catch(err => console.error('Failed to save history:', err));
+
         setStatusMessage(null);
       } else {
         setError('Gagal mendapatkan hasil prediksi');
@@ -167,7 +181,7 @@ export default function HomeScreen() {
         {/* Header */}
         <View style={styles.header}>
           <View>
-            <Text style={styles.greetingText}>Halo, Dokter 👋</Text>
+            <Text style={styles.greetingText}>Halo 👋</Text>
             <Text style={styles.welcomeText}>Dentalogic8</Text>
           </View>
         </View>
@@ -291,8 +305,9 @@ export default function HomeScreen() {
                 </TouchableOpacity>
 
                 <View style={styles.mainResult}>
+                  {/* Simplified Result Summary */}
                   <View style={styles.resultHeadingRow}>
-                    <Text style={styles.resultLabel}>Klasifikasi Utama</Text>
+                    <Text style={styles.resultLabel}>Klasifikasi</Text>
                     <View style={styles.badgeContainer}>
                       <Text style={styles.badgeText}>{prediction.label}</Text>
                     </View>
@@ -301,31 +316,41 @@ export default function HomeScreen() {
                   {prediction.confidence !== undefined && (
                     <View style={styles.confidenceSection}>
                       <View style={styles.confidenceRow}>
-                        <Text style={styles.confidenceLabel}>Tingkat Kepercayaan</Text>
+                        <Text style={styles.confidenceLabel}>Kepercayaan</Text>
                         <Text style={styles.confidenceValue}>{(prediction.confidence * 100).toFixed(1)}%</Text>
                       </View>
                       <View style={styles.progressBarBg}>
-                        <View style={[styles.progressBarFill, { width: `${(prediction.confidence * 100)}%` }]} />
+                        <View style={[styles.progressBarFill, { width: `${Math.min(prediction.confidence * 100, 100)}%` }]} />
                       </View>
                     </View>
                   )}
 
-                  {detectionStats && (
-                    <View style={styles.classDistribution}>
-                      <Text style={styles.sectionTitle}>Distribusi Karies</Text>
-                      <View style={styles.countsGrid}>
-                        {['D1', 'D2', 'D3', 'D4', 'D5', 'D6'].map(cls => (
-                          <View key={cls} style={[styles.countItem, detectionStats[cls] ? styles.countItemActive : styles.countItemEmpty]}>
-                            <Text style={{ fontSize: 12, fontWeight: '600', color: detectionStats[cls] ? '#fff' : '#94A3B8' }}>{cls}</Text>
-                            <Text style={{ fontSize: 16, fontWeight: '800', color: detectionStats[cls] ? '#fff' : '#64748B' }}>
-                              {detectionStats[cls] || 0}
-                            </Text>
-                          </View>
-                        ))}
-                      </View>
-                    </View>
-                  )}
 
+
+                  {/* View Detail Button */}
+                  <TouchableOpacity
+                    style={styles.detailButton}
+                    onPress={() => {
+                      router.push({
+                        pathname: '/analysis-detail',
+                        params: {
+                          imageUri: selectedImage.uri,
+                          label: prediction.label,
+                          confidence: prediction.confidence?.toString() || '0',
+                          detections: JSON.stringify(prediction.detections || []),
+                          inferenceTime: prediction.inferenceTime?.toString() || '0',
+                          source: prediction.source || 'local',
+                          imageWidth: selectedImage.width.toString(),
+                          imageHeight: selectedImage.height.toString(),
+                        },
+                      });
+                    }}
+                  >
+                    <IconSymbol name="doc.text.magnifyingglass" size={18} color="#fff" />
+                    <Text style={styles.detailButtonText}>Lihat Detail & Penanganan</Text>
+                  </TouchableOpacity>
+
+                  {/* Re-analyze Button */}
                   <TouchableOpacity
                     style={styles.secondaryPredictButton}
                     onPress={handlePredict}
@@ -501,8 +526,23 @@ const styles = StyleSheet.create({
   progressBarBg: { height: 8, backgroundColor: '#F1F5F9', borderRadius: 4, overflow: 'hidden' },
   progressBarFill: { height: '100%', backgroundColor: Colors.light.tint, borderRadius: 4 },
 
-  secondaryPredictButton: { marginTop: 20, paddingVertical: 12, alignItems: 'center' },
+  secondaryPredictButton: { marginTop: 8, paddingVertical: 12, alignItems: 'center' },
   secondaryPredictButtonText: { color: Colors.light.tint, fontWeight: '600' },
+
+  detectionSummary: { backgroundColor: '#F0F9FF', padding: 12, borderRadius: 12, alignItems: 'center' },
+  summaryText: { fontSize: 14, fontWeight: '600', color: Colors.light.tint },
+
+  detailButton: {
+    backgroundColor: Colors.light.tint,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    paddingVertical: 14,
+    borderRadius: 14,
+    marginTop: 8,
+  },
+  detailButtonText: { color: '#fff', fontSize: 15, fontWeight: '700' },
 
   classDistribution: { marginTop: 16, borderTopWidth: 1, borderTopColor: '#F1F5F9', paddingTop: 16 },
   sectionTitle: { fontSize: 14, fontWeight: '700', color: Colors.light.text, marginBottom: 12 },

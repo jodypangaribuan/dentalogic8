@@ -29,14 +29,26 @@ export default function RootLayout() {
       <Stack>
         <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
         <Stack.Screen name="modal" options={{ presentation: 'modal', title: 'Modal' }} />
-        <Stack.Screen 
-          name="camera-modal" 
-          options={{ 
+        <Stack.Screen
+          name="capture"
+          options={{
+            headerShown: false,
+          }}
+        />
+        <Stack.Screen
+          name="analysis-detail"
+          options={{
+            headerShown: false,
+          }}
+        />
+        <Stack.Screen
+          name="camera-modal"
+          options={{
             presentation: 'fullScreenModal',
             headerShown: false,
             gestureEnabled: false,
             animation: 'slide_from_bottom'
-          }} 
+          }}
         />
       </Stack>
       <StatusBar style="dark" />

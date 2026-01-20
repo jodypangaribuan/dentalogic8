@@ -4,7 +4,7 @@ const { getDefaultConfig } = require('expo/metro-config');
 /** @type {import('expo/metro-config').MetroConfig} */
 const config = getDefaultConfig(__dirname);
 
-// Add onnx to asset extensions so we can require() the model file
+// Add model formats to asset extensions so we can require() the model files
 config.resolver.assetExts.push('onnx');
 config.resolver.assetExts.push('zip');
 

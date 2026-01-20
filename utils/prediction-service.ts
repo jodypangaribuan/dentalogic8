@@ -1,5 +1,6 @@
 /**
- * Unified prediction service that supports both local (offline) and API-based inference
+ * Unified prediction service that supports local (offline) and API-based inference
+ * Using ONNX Runtime for local inference
  */
 
 import { checkServerHealth, predictCariesFromServer } from './api';
@@ -36,7 +37,7 @@ export async function initializeLocalModel(): Promise<boolean> {
     try {
         const success = await loadModel();
         if (success) {
-            console.log('[Prediction] Local model ready');
+            console.log('[Prediction] Local ONNX model ready');
         } else {
             console.warn('[Prediction] Failed to initialize local model');
         }
@@ -99,7 +100,9 @@ export async function predict(imageUri: string): Promise<PredictionResult> {
  */
 async function predictWithLocal(imageUri: string): Promise<PredictionResult> {
     try {
+        console.log('[Prediction] Using ONNX...');
         const result = await predictLocal(imageUri);
+
         return {
             ...result,
             source: 'local',
@@ -140,11 +143,7 @@ async function predictWithAuto(imageUri: string): Promise<PredictionResult> {
     try {
         if (isModelLoaded()) {
             console.log('[Prediction] Trying local inference...');
-            const result = await predictLocal(imageUri);
-            return {
-                ...result,
-                source: 'local',
-            };
+            return await predictWithLocal(imageUri);
         }
     } catch (localError) {
         console.warn('[Prediction] Local inference failed, trying API...', localError);

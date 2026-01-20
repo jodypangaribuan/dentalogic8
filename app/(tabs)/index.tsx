@@ -125,6 +125,7 @@ export default function HomeScreen() {
       if (result) {
         setPrediction({
           ...result,
+          label: result.class,
           inferenceTime
         });
         setStatusMessage(null);

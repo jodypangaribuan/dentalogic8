@@ -1,12 +1,14 @@
 
+import { BoundingBoxImage } from '@/components/BoundingBoxImage';
 import { IconSymbol } from '@/components/ui/icon-symbol';
 import { Colors } from '@/constants/theme';
+import { predict, PredictionResult } from '@/utils/prediction-service';
 import * as Brightness from 'expo-brightness';
 import { CameraType, CameraView, useCameraPermissions } from 'expo-camera';
 import * as ImagePicker from 'expo-image-picker';
 import { router, useLocalSearchParams } from 'expo-router';
 import React, { useEffect, useRef, useState } from 'react';
-import { Alert, StatusBar, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { ActivityIndicator, Alert, StatusBar, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 
 export default function CameraModal() {
@@ -15,20 +17,22 @@ export default function CameraModal() {
   const [flash, setFlash] = useState<'on' | 'off' | 'auto'>('off');
   const [frontCameraFlash, setFrontCameraFlash] = useState(false);
   const [originalBrightness, setOriginalBrightness] = useState<number>(1.0);
+
+  // Analysis State
+  const [isAnalyzing, setIsAnalyzing] = useState(false);
+  const [capturedImage, setCapturedImage] = useState<string | null>(null);
+  const [predictionResult, setPredictionResult] = useState<PredictionResult | null>(null);
+
   const cameraRef = useRef<CameraView>(null);
   const params = useLocalSearchParams();
   const insets = useSafeAreaInsets();
 
   // Determine where user came from by checking navigation state
   const getPreviousScreen = () => {
-    // Check if we have a specific previous screen parameter
     if (params.from) {
       return params.from as string;
     }
-
-    // Default logic: check current navigation state
-    // This is a simple approach - in a real app you might want more sophisticated tracking
-    return 'home'; // default to home
+    return 'home';
   };
 
   useEffect(() => {
@@ -56,10 +60,8 @@ export default function CameraModal() {
     const controlBrightness = async () => {
       try {
         if (facing === 'front' && frontCameraFlash) {
-          // Set brightness to maximum when front camera flash is active
           await Brightness.setBrightnessAsync(1.0);
         } else {
-          // Restore original brightness when flash is off or camera is switched
           await Brightness.setBrightnessAsync(originalBrightness);
         }
       } catch (error) {
@@ -70,7 +72,7 @@ export default function CameraModal() {
     controlBrightness();
   }, [facing, frontCameraFlash, originalBrightness]);
 
-  // Cleanup: restore original brightness when component unmounts
+  // Cleanup: restore original brightness on unmount
   useEffect(() => {
     return () => {
       const restoreBrightness = async () => {
@@ -84,36 +86,56 @@ export default function CameraModal() {
     };
   }, [originalBrightness]);
 
+  const processImage = async (uri: string) => {
+    try {
+      setIsAnalyzing(true);
+      setCapturedImage(uri);
+
+      // Artificial delay for UX (so user sees "Analyzing..." state)
+      // and to allow UI to update before heavy computation
+      await new Promise(resolve => setTimeout(resolve, 100));
+
+      console.log('Starting prediction for:', uri);
+      const result = await predict(uri);
+      console.log('Prediction result:', result);
+
+      setPredictionResult(result);
+    } catch (error) {
+      console.error('Analysis failed:', error);
+      Alert.alert(
+        'Gagal Menganalisis',
+        'Terjadi kesalahan saat memproses gambar. Silakan coba lagi.',
+        [{ text: 'OK', onPress: resetCapture }]
+      );
+    } finally {
+      setIsAnalyzing(false);
+    }
+  };
+
   const pickImageFromGallery = async () => {
     try {
-      // Request media library permissions
       const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
 
       if (status !== 'granted') {
         Alert.alert(
           'Izin Diperlukan',
-          'Mohon berikan izin untuk mengakses galeri foto Anda untuk mengunggah gambar.',
+          'Mohon berikan izin untuk mengakses galeri foto Anda.',
           [{ text: 'OK' }]
         );
         return;
       }
 
-      // Launch image picker
       const result = await ImagePicker.launchImageLibraryAsync({
         mediaTypes: ImagePicker.MediaTypeOptions.Images,
         allowsEditing: true,
-        aspect: [1, 1], // Square aspect ratio for dental scans
         quality: 0.8,
       });
 
       if (!result.canceled && result.assets[0]) {
-        const selectedImage = result.assets[0];
-        console.log('Image selected from gallery:', selectedImage.uri);
-        Alert.alert('Berhasil', 'Gambar berhasil dipilih dari galeri!');
-        // Handle the selected image here - same as camera capture
+        await processImage(result.assets[0].uri);
       }
     } catch (error) {
-      console.error('Error picking image from gallery:', error);
+      console.error('Error picking image:', error);
       Alert.alert('Kesalahan', 'Gagal memilih gambar dari galeri');
     }
   };
@@ -121,7 +143,6 @@ export default function CameraModal() {
   const toggleCameraFacing = () => {
     setFacing(current => {
       const newFacing = current === 'back' ? 'front' : 'back';
-      // Reset front camera flash when switching cameras
       if (newFacing === 'back') {
         setFrontCameraFlash(false);
       }
@@ -131,10 +152,8 @@ export default function CameraModal() {
 
   const toggleFlash = () => {
     if (facing === 'front') {
-      // For front camera, simulate flash with white border and higher contrast
       setFrontCameraFlash(current => !current);
     } else {
-      // For back camera, use normal flash
       setFlash(current => {
         if (current === 'off') return 'on';
         if (current === 'on') return 'auto';
@@ -148,11 +167,12 @@ export default function CameraModal() {
       if (cameraRef.current) {
         const photo = await cameraRef.current.takePictureAsync({
           quality: 0.8,
+          skipProcessing: true, // Faster capture
         });
 
-        // Handle the captured photo here
-        console.log('Photo taken:', photo.uri);
-        Alert.alert('Berhasil', 'Foto berhasil diambil!');
+        if (photo) {
+          await processImage(photo.uri);
+        }
       }
     } catch (error) {
       console.error('Error taking picture:', error);
@@ -160,12 +180,17 @@ export default function CameraModal() {
     }
   };
 
+  const resetCapture = () => {
+    setCapturedImage(null);
+    setPredictionResult(null);
+    setIsAnalyzing(false);
+  };
+
   const handleBack = () => {
     router.back();
   };
 
   if (!permission) {
-    // Camera permissions are still loading
     return <View style={styles.container} />;
   }
 
@@ -179,7 +204,6 @@ export default function CameraModal() {
               style={styles.backButton}
               onPress={handleBack}
               activeOpacity={0.7}
-              hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
             >
               <IconSymbol name="chevron.left" size={24} color="white" />
             </TouchableOpacity>
@@ -198,7 +222,76 @@ export default function CameraModal() {
               <Text style={styles.permissionButtonText}>Berikan Izin</Text>
             </TouchableOpacity>
           </View>
-        </SafeAreaView>
+        </SafeAreaView >
+      </View >
+    );
+  }
+
+  // Render Result View
+  if (capturedImage) {
+    return (
+      <View style={styles.container}>
+        <StatusBar barStyle="light-content" backgroundColor="transparent" translucent />
+        <View style={styles.resultContainer}>
+          <View style={[styles.header, { paddingTop: Math.max(insets.top + 10, 20) }]}>
+            <TouchableOpacity
+              style={styles.backButton}
+              onPress={resetCapture}
+              activeOpacity={0.7}
+            >
+              <IconSymbol name="xmark" size={24} color="white" />
+            </TouchableOpacity>
+            <Text style={styles.headerText}>Hasil Analisis</Text>
+            <View style={{ width: 44 }} />
+          </View>
+
+          <View style={styles.resultImageContainer}>
+            {predictionResult ? (
+              <BoundingBoxImage
+                imageUri={capturedImage}
+                detections={predictionResult.detections || []}
+                style={styles.boundingBoxContainer}
+              />
+            ) : (
+              // This handles the brief moment before prediction result is set but image is captured,
+              // or acts as a fallback. However, normally isAnalyzing handles the loading state overlay.
+              <ActivityIndicator size="large" color={Colors.light.tint} />
+            )}
+
+            {/* Loading Overlay */}
+            {isAnalyzing && (
+              <View style={styles.loadingOverlay}>
+                <ActivityIndicator size="large" color="#FFFFFF" />
+                <Text style={styles.loadingText}>Menganalisis gigi...</Text>
+              </View>
+            )}
+          </View>
+
+          {!isAnalyzing && predictionResult && (
+            <View style={[styles.resultFooter, { paddingBottom: Math.max(insets.bottom + 20, 40) }]}>
+              <View style={styles.resultSummary}>
+                <Text style={styles.resultTitle}>
+                  {predictionResult.class === 'Caries' ? 'Karies Terdeteksi' : 'Gigi Sehat'}
+                </Text>
+                <Text style={styles.resultConfidence}>
+                  Confidence: {(predictionResult.confidence * 100).toFixed(1)}%
+                </Text>
+                <Text style={styles.resultDetails}>
+                  {predictionResult.detections?.length
+                    ? `${predictionResult.detections.length} area terdeteksi`
+                    : 'Tidak ada karies yang terdeteksi'}
+                </Text>
+              </View>
+
+              <TouchableOpacity
+                style={styles.actionButton}
+                onPress={resetCapture}
+              >
+                <Text style={styles.actionButtonText}>Pindai Lagi</Text>
+              </TouchableOpacity>
+            </View>
+          )}
+        </View>
       </View>
     );
   }
@@ -224,6 +317,13 @@ export default function CameraModal() {
           <View style={styles.flashSpecularOverlay} />
           <View style={styles.flashBrightnessOverlay} />
         </>
+      )}
+
+      {isAnalyzing && (
+        <View style={styles.loadingOverlay}>
+          <ActivityIndicator size="large" color="#FFFFFF" />
+          <Text style={styles.loadingText}>Memproses gambar...</Text>
+        </View>
       )}
 
       <View style={styles.overlay}>
@@ -273,6 +373,7 @@ export default function CameraModal() {
             <TouchableOpacity
               style={styles.captureButton}
               onPress={takePicture}
+              disabled={isAnalyzing}
             >
               <View style={styles.captureButtonInner} />
             </TouchableOpacity>
@@ -298,6 +399,57 @@ const styles = StyleSheet.create({
   camera: {
     flex: 1,
   },
+  resultContainer: {
+    flex: 1,
+    backgroundColor: '#000',
+  },
+  resultImageContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  boundingBoxContainer: {
+    flex: 1,
+    width: '100%',
+  },
+  resultFooter: {
+    paddingHorizontal: 20,
+    backgroundColor: 'rgba(0,0,0,0.8)',
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    paddingTop: 20,
+  },
+  resultSummary: {
+    marginBottom: 20,
+    alignItems: 'center',
+  },
+  resultTitle: {
+    fontSize: 24,
+    fontWeight: 'bold',
+    color: 'white',
+    marginBottom: 8,
+  },
+  resultConfidence: {
+    fontSize: 16,
+    color: '#CCC',
+    marginBottom: 4,
+  },
+  resultDetails: {
+    fontSize: 14,
+    color: '#AAA',
+  },
+  actionButton: {
+    backgroundColor: Colors.light.tint,
+    paddingVertical: 16,
+    borderRadius: 12,
+    alignItems: 'center',
+  },
+  actionButtonText: {
+    color: 'white',
+    fontSize: 16,
+    fontWeight: 'bold',
+  },
+
   overlay: {
     position: 'absolute',
     top: 0,
@@ -305,6 +457,23 @@ const styles = StyleSheet.create({
     right: 0,
     bottom: 0,
     justifyContent: 'space-between',
+  },
+  loadingOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: 'rgba(0,0,0,0.7)',
+    zIndex: 10,
+  },
+  loadingText: {
+    color: 'white',
+    marginTop: 10,
+    fontSize: 16,
+    fontWeight: '600',
   },
   header: {
     flexDirection: 'row',
@@ -325,9 +494,6 @@ const styles = StyleSheet.create({
     flex: 1,
     alignItems: 'center',
   },
-  headerRight: {
-    width: 44,
-  },
   headerText: {
     fontSize: 20,
     fontWeight: 'bold',
@@ -335,6 +501,8 @@ const styles = StyleSheet.create({
     textShadowColor: 'rgba(0, 0, 0, 0.75)',
     textShadowOffset: { width: -1, height: 1 },
     textShadowRadius: 10,
+    textAlign: 'center',
+    flex: 1,
   },
   instructionText: {
     fontSize: 14,
@@ -438,9 +606,7 @@ const styles = StyleSheet.create({
   flashButtonActive: {
     backgroundColor: 'rgba(255, 255, 255, 0.3)',
   },
-  // Front camera flash simulation styles
   frontCameraFlash: {
-    // 100% contrast for maximum flash simulation
     filter: 'contrast(1.0) brightness(2.0) saturate(1.5)',
   },
   flashScreenOverlay: {

@@ -10,6 +10,7 @@ import * as jpeg from 'jpeg-js';
 import { InferenceSession, Tensor } from 'onnxruntime-react-native';
 
 // Model configuration
+// Model configuration
 const MODEL_INPUT_SIZE = 640;
 const CARIES_CLASSES = ['D0', 'D1', 'D2', 'D3', 'D4', 'D5', 'D6'];
 const CONFIDENCE_THRESHOLD = 0.25;
@@ -95,8 +96,10 @@ export async function loadModel(): Promise<boolean> {
 
         // Create inference session from the file path
         // ONNX Runtime needs a proper file path, not a content URI
-        console.log('[LocalInference] Creating inference session...');
-        session = await InferenceSession.create(modelPath);
+        console.log('[LocalInference] Creating inference session with CoreML...');
+        session = await InferenceSession.create(modelPath, {
+            executionProviders: ['coreml', 'cpu'],
+        });
 
         console.log('[LocalInference] Model loaded successfully');
         console.log('[LocalInference] Input names:', session.inputNames);
@@ -150,18 +153,17 @@ async function preprocessImage(imageUri: string): Promise<{
     // Create tensor in CHW format with normalization
     const tensor = new Float32Array(1 * 3 * MODEL_INPUT_SIZE * MODEL_INPUT_SIZE);
 
-    for (let y = 0; y < MODEL_INPUT_SIZE; y++) {
-        for (let x = 0; x < MODEL_INPUT_SIZE; x++) {
-            const pixelIndex = (y * MODEL_INPUT_SIZE + x) * 4; // RGBA
-            const r = pixelData[pixelIndex] / 255.0;
-            const g = pixelData[pixelIndex + 1] / 255.0;
-            const b = pixelData[pixelIndex + 2] / 255.0;
+    const numPixels = MODEL_INPUT_SIZE * MODEL_INPUT_SIZE;
+    let ptr = 0; // pointer for pixelData (RGBA)
+    let rPtr = 0; // pointer for R channel in tensor
+    let gPtr = numPixels; // pointer for G channel
+    let bPtr = 2 * numPixels; // pointer for B channel
 
-            // CHW format: [channel][height][width]
-            tensor[0 * MODEL_INPUT_SIZE * MODEL_INPUT_SIZE + y * MODEL_INPUT_SIZE + x] = r;
-            tensor[1 * MODEL_INPUT_SIZE * MODEL_INPUT_SIZE + y * MODEL_INPUT_SIZE + x] = g;
-            tensor[2 * MODEL_INPUT_SIZE * MODEL_INPUT_SIZE + y * MODEL_INPUT_SIZE + x] = b;
-        }
+    for (let i = 0; i < numPixels; i++) {
+        tensor[rPtr++] = pixelData[ptr++] / 255.0;
+        tensor[gPtr++] = pixelData[ptr++] / 255.0;
+        tensor[bPtr++] = pixelData[ptr++] / 255.0;
+        ptr++; // skip Alpha channel
     }
 
     // For simplified version, we assume the image is resized to 640x640

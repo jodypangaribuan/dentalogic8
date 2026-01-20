@@ -1,5 +1,6 @@
 import { IconSymbol } from '@/components/ui/icon-symbol';
 import { getServerUrl } from '@/utils/config';
+import { predict } from '@/utils/prediction-service';
 import * as FileSystem from 'expo-file-system/legacy';
 import { router, useFocusEffect } from 'expo-router';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
@@ -78,9 +79,9 @@ export default function ScanScreen() {
     setFlashOn(prev => !prev);
   };
 
-  // Process frames using API
+  // Process frames using API or Local Model
   useEffect(() => {
-    if (!apiAvailable || !isActive) return;
+    if (!isActive) return;
 
     let isMounted = true;
     let isCapturing = false;
@@ -102,23 +103,17 @@ export default function ScanScreen() {
         if (photo && isMounted && isActive) {
           setPhotoInfo({ width: photo.width, height: photo.height });
 
-          const base64 = await FileSystem.readAsStringAsync(`file://${photo.path}`, {
-            encoding: FileSystem.EncodingType.Base64,
-          });
+          const uri = `file://${photo.path}`;
 
-          const response = await fetch(`${API_URL}/predict-base64`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ image: `data:image/jpeg;base64,${base64}` }),
-          });
+          // Use unified prediction service (handles local or API automatically)
+          const result = await predict(uri);
 
-          if (response.ok && isMounted && isActive) {
-            const result = await response.json();
-            setDetections(result.detections?.length > 0 ? result.detections : []);
+          if (isMounted && isActive && result) {
+            setDetections(result.detections || []);
           }
 
           try {
-            await FileSystem.deleteAsync(`file://${photo.path}`, { idempotent: true });
+            await FileSystem.deleteAsync(uri, { idempotent: true });
           } catch (e) { }
         }
       } catch (error) {
@@ -126,7 +121,7 @@ export default function ScanScreen() {
       } finally {
         isCapturing = false;
         setIsProcessing(false);
-        if (isMounted && isActive) setTimeout(processFrame, 400);
+        if (isMounted && isActive) setTimeout(processFrame, 100); // reduced delay for smoother feel
       }
     };
 
@@ -135,7 +130,7 @@ export default function ScanScreen() {
       isMounted = false;
       clearTimeout(timeoutId);
     };
-  }, [apiAvailable, isActive, flashOn]);
+  }, [isActive, flashOn]);
 
   if (!hasPermission) {
     return (
@@ -170,15 +165,17 @@ export default function ScanScreen() {
       {/* Detection Overlay */}
       <Svg style={StyleSheet.absoluteFill} width={previewLayout.width} height={previewLayout.height}>
         {detections.map((det, index) => {
-          let [nx1, ny1, nx2, ny2] = det.bbox;
-
-          if (needsSwap) {
-            const temp_x1 = 1 - ny2;
-            const temp_y1 = nx1;
-            const temp_x2 = 1 - ny1;
-            const temp_y2 = nx2;
-            nx1 = temp_x1; ny1 = temp_y1; nx2 = temp_x2; ny2 = temp_y2;
+          let [x1, y1, x2, y2] = det.bbox;
+          // Normalize coordinates if they are in pixel values (assuming > 1 means pixels)
+          if (x1 > 1 || y1 > 1 || x2 > 1 || y2 > 1) {
+            x1 = x1 / 640;
+            y1 = y1 / 640;
+            x2 = x2 / 640;
+            y2 = y2 / 640;
           }
+
+          // Use coordinates directly without rotation as ImageManipulator usually handles orientation
+          let nx1 = x1, ny1 = y1, nx2 = x2, ny2 = y2;
 
           const effectivePhotoWidth = needsSwap ? photoInfo.height : photoInfo.width;
           const effectivePhotoHeight = needsSwap ? photoInfo.width : photoInfo.height;
@@ -201,32 +198,34 @@ export default function ScanScreen() {
           const color = CLASS_COLORS[det.class] || '#FFFFFF';
 
           if (width < 5 || height < 5) return null;
-          if (x > previewLayout.width || y > previewLayout.height) return null;
+          // Filter out obviously erratic boxes that are way off screen
+          // Relaxed constraints to ensure we see something
+          if (x > previewLayout.width + 100 || y > previewLayout.height + 100 || x + width < -100 || y + height < -100) return null;
 
           return (
             <React.Fragment key={index}>
               <Rect
-                x={Math.max(0, x)}
-                y={Math.max(0, y)}
-                width={Math.max(10, width)}
-                height={Math.max(10, height)}
+                x={x}
+                y={y}
+                width={width}
+                height={height}
                 stroke={color}
                 strokeWidth={3}
                 fill="transparent"
               />
               <Rect
-                x={Math.max(0, x)}
-                y={Math.max(0, y - 26)}
-                width={Math.max(60, Math.min(width, 100))}
+                x={x}
+                y={Math.max(0, y - 24)}
+                width={Math.min(width, 100)} // Cap label width
                 height={24}
                 fill={color}
                 rx={4}
               />
               <SvgText
-                x={Math.max(4, x + 4)}
-                y={Math.max(16, y - 8)}
+                x={x + 4}
+                y={Math.max(0, y - 24) + 16}
                 fill="#FFFFFF"
-                fontSize={13}
+                fontSize={12}
                 fontWeight="bold"
               >
                 {det.class} {det.confidence.toFixed(0)}%
